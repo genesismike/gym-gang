@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0f1a">
+  <title>Gym Gang</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden}
+    body{background:#0a0f1a;color:#f9fafb;font-family:-apple-system,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased;position:fixed;width:100%}
+    #root{height:100%}
+    button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer;font-family:inherit}
+    input,textarea{touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-family:inherit}
+    .scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+    ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes toastDrop{from{opacity:0;transform:translateX(-50%) translateY(-14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+    @keyframes pop{0%{transform:scale(0.92)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+    .spinner{width:26px;height:26px;border:3px solid rgba(249,115,22,.15);border-top-color:#f97316;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+    .fade-up{animation:fadeUp .3s ease}
+    .toast-in{animation:toastDrop .3s ease}
+    .pop{animation:pop .35s ease}
+    .text-grad{background:linear-gradient(135deg,#f97316,#facc15);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    input:-webkit-autofill{-webkit-box-shadow:0 0 0 100px #111827 inset!important;-webkit-text-fill-color:#f9fafb!important}
+  </style>
+</head>
+<body>
+<div id="root">
+  <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0f1a">
+    <div class="spinner"></div>
+  </div>
+</div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo } = React;
+
+const SUPA_URL = 'https://lsjyjussugqhxnrskpoj.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzanlqdXNzdWdxaHhucnNrcG9qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NjgyMTAsImV4cCI6MjA5MTI0NDIxMH0.FGBGwxnsdCwyMtZF8L0hEwh8iZ5cqAZCyAjrlBVwAJE';
+const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+  auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+});
+
+const WORKOUT_PTS = 15, WEEK_BONUS = 20, MONTH_BONUS = 50;
+
+const CHALLENGES = [
+  { id:1,  title:'Perna da Semana',     desc:'Completa um treino de pernas',         pts:25, icon:'🦵' },
+  { id:2,  title:'Cardio Assassino',    desc:'20 min de cardio num treino',           pts:20, icon:'🏃' },
+  { id:3,  title:'Rei do Pull',         desc:'3 séries de pull-ups nesta semana',     pts:20, icon:'💪' },
+  { id:4,  title:'Madrugador',          desc:'Treina antes das 8h da manhã',          pts:30, icon:'🌅' },
+  { id:5,  title:'Trio Perfeito',       desc:'Treina 3 dias esta semana',             pts:25, icon:'🎯' },
+  { id:6,  title:'Superset King',       desc:'Faz 5 supersets num treino',            pts:30, icon:'🔥' },
+  { id:7,  title:'Core de Ferro',       desc:'Abs em 2 treinos desta semana',         pts:20, icon:'⚡' },
+  { id:8,  title:'Personal Record',     desc:'Bate um recorde pessoal',               pts:40, icon:'🏆' },
+  { id:9,  title:'Guerreiro Solitário', desc:'Treina num dia que mais ninguém foi',   pts:25, icon:'🗡️' },
+  { id:10, title:'Stretching Master',   desc:'10 min de alongamentos após o treino', pts:15, icon:'🧘' },
+  { id:11, title:'Hidratação Total',    desc:'Bebe 3L de água num dia de treino',     pts:15, icon:'💧' },
+  { id:12, title:'Bench Boss',          desc:'Aumenta o peso no supino esta semana',  pts:35, icon:'🏋️' },
+];
+
+const AVATARS = ['🐺','🦁','🐻','🦊','🐯','🦅','🐉','🦝','🐗','🦈','🐆','🦏','🦬','🐘','🦒'];
+const RANKS = [
+  {min:0,label:'Novato',color:'#9ca3af'},{min:100,label:'Iniciado',color:'#60a5fa'},
+  {min:300,label:'Guerreiro',color:'#34d399'},{min:600,label:'Veterano',color:'#f97316'},
+  {min:1000,label:'Elite',color:'#facc15'},{min:1500,label:'Lenda',color:'#e879f9'},
+];
+
+function weekKey(d=new Date()){const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));dt.setUTCDate(dt.getUTCDate()+4-(dt.getUTCDay()||7));const y=new Date(Date.UTC(dt.getUTCFullYear(),0,1));return `${dt.getUTCFullYear()}-W${String(Math.ceil((((dt-y)/86400000)+1)/7)).padStart(2,'0')}`;}
+function todayStr(){return new Date().toISOString().split('T')[0];}
+function fmtDate(d){return new Date(d+'T12:00:00').toLocaleDateString('pt-PT',{day:'numeric',month:'short'});}
+function weekChallenges(wk){let h=0;for(let i=0;i<wk.length;i++)h=(h*31+wk.charCodeAt(i))>>>0;return[...CHALLENGES].sort(()=>{h=(h*1664525+1013904223)>>>0;return(h%3)-1;}).slice(0,3);}
+function calcPts(workouts,completions){let pts=workouts.length*WORKOUT_PTS;const bw={};workouts.forEach(w=>{const k=weekKey(new Date(w.date));bw[k]=(bw[k]||0)+1;});pts+=Object.values(bw).filter(c=>c>=3).length*WEEK_BONUS;const qw=Object.entries(bw).filter(([,c])=>c>=3).map(([k])=>k).sort();if(qw.length>=4)pts+=Math.floor(qw.length/4)*MONTH_BONUS;completions.forEach(cc=>{const ch=CHALLENGES.find(c=>c.id===cc.challenge_id);if(ch)pts+=ch.pts;});return pts;}
+function rankFor(pts){let r=RANKS[0];for(const x of RANKS)if(pts>=x.min)r=x;return r;}
+function dayStreak(workouts){if(!workouts.length)return 0;const s=new Set(workouts.map(w=>w.date));let n=0,cur=todayStr();while(s.has(cur)){n++;const d=new Date(cur);d.setDate(d.getDate()-1);cur=d.toISOString().split('T')[0];}return n;}
+function thisWeekCount(workouts){const wk=weekKey();return workouts.filter(w=>weekKey(new Date(w.date))===wk).length;}
+async function compressImg(file,maxPx=1280,q=0.85){return new Promise(resolve=>{const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{let{naturalWidth:w,naturalHeight:h}=img;if(w>maxPx||h>maxPx){const r=Math.min(maxPx/w,maxPx/h);w=Math.round(w*r);h=Math.round(h*r);}const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);canvas.toBlob(resolve,'image/jpeg',q);};img.src=e.target.result;};reader.readAsDataURL(file);});}
+async function uploadPhoto(userId,file){const blob=await compressImg(file);const path=`${userId}/${Date.now()}.jpg`;const{error}=await sb.storage.from('workout-photos').upload(path,blob,{contentType:'image/jpeg',cacheControl:'3600'});if(error)throw error;return sb.storage.from('workout-photos').getPublicUrl(path).data.publicUrl;}
+
+const C={bg:'#0a0f1a',card:'#141d2e',card2:'#1a2640',bord:'#1e2d45',bord2:'#2a3d5a',text:'#f9fafb',sub:'#8b9bb4',dim:'#3d5070',orange:'#f97316',yellow:'#facc15',green:'#34d399',red:'#ef4444'};
+const safe={top:'env(safe-area-inset-top, 0px)',bottom:'env(safe-area-inset-bottom, 0px)'};
+
+function Spinner({size=26,color=C.orange}){return <div style={{width:size,height:size,border:`3px solid ${color}22`,borderTopColor:color,borderRadius:'50%',animation:'spin .7s linear infinite',flexShrink:0}}/>;}
+function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2600);return()=>clearTimeout(t);},[msg]);return <div className="toast-in" style={{position:'fixed',top:`calc(16px + ${safe.top})`,left:'50%',transform:'translateX(-50%)',background:C.orange,color:'#fff',fontWeight:700,fontSize:14,padding:'10px 20px',borderRadius:12,zIndex:200,boxShadow:'0 4px 24px rgba(0,0,0,.6)',whiteSpace:'nowrap',maxWidth:'calc(100vw - 32px)',textAlign:'center'}}>{msg}</div>;}
+function Medal({rank}){if(rank===1)return <span style={{fontSize:22}}>🥇</span>;if(rank===2)return <span style={{fontSize:22}}>🥈</span>;if(rank===3)return <span style={{fontSize:22}}>🥉</span>;return <span style={{width:28,textAlign:'center',fontWeight:700,fontSize:13,color:C.dim}}>{rank}</span>;}
+function Dots({count,max=5}){return <div style={{display:'flex',gap:4}}>{Array.from({length:max},(_,i)=><div key={i} style={{width:8,height:8,borderRadius:'50%',background:i<count?C.orange:C.bord}}/>)}</div>;}
+function Bar({value,max,color}){const pct=max>0?Math.min(100,(value/max)*100):0;return <div style={{height:4,borderRadius:99,background:C.bord,overflow:'hidden',marginTop:6}}><div style={{height:'100%',width:`${pct}%`,background:color,borderRadius:99,transition:'width .5s ease'}}/></div>;}
+function Btn({children,onClick,disabled,style={},variant='primary',loading}){const base={display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',borderRadius:14,padding:'14px 20px',fontSize:15,fontWeight:700,transition:'opacity .15s',cursor:disabled||loading?'default':'pointer',opacity:disabled||loading?0.5:1,...style};const variants={primary:{background:C.orange,color:'#fff'},ghost:{background:C.card2,color:C.text,border:`1px solid ${C.bord}`},danger:{background:'rgba(239,68,68,.15)',color:C.red,border:`1px solid rgba(239,68,68,.3)`},success:{background:'rgba(52,211,153,.1)',color:C.green,border:`1px solid rgba(52,211,153,.25)`}};return <button style={{...base,...variants[variant]}} onClick={!disabled&&!loading?onClick:undefined}>{loading?<Spinner size={18} color={variant==='primary'?'#fff':C.orange}/>:children}</button>;}
+function Input({label,...props}){return <div>{label&&<div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',color:C.sub,marginBottom:6}}>{label}</div>}<input style={{width:'100%',background:C.card,border:`1.5px solid ${C.bord}`,borderRadius:12,padding:'13px 14px',color:C.text,fontSize:16,outline:'none'}} onFocus={e=>e.target.style.borderColor=C.orange} onBlur={e=>e.target.style.borderColor=C.bord} {...props}/></div>;}
+
+function AuthScreen(){
+  const [email,setEmail]=useState('');
+  const [sent,setSent]=useState(false);
+  const [loading,setLoad]=useState(false);
+  const [err,setErr]=useState('');
+  const redirectTo=window.location.protocol==='file:'?undefined:(window.location.origin+window.location.pathname);
+  async function handleSend(){if(!email.trim())return;setLoad(true);setErr('');const{error}=await sb.auth.signInWithOtp({email:email.trim(),options:{emailRedirectTo:redirectTo}});setLoad(false);if(error){setErr(error.message);return;}setSent(true);}
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24}}>
+      <div style={{width:'100%',maxWidth:360}}>
+        <div style={{textAlign:'center',marginBottom:40}}>
+          <div style={{fontSize:52,marginBottom:12}}>🏋️</div>
+          <h1 className="text-grad" style={{fontSize:36,fontWeight:900,letterSpacing:'-1px',marginBottom:6}}>GYM GANG</h1>
+          <p style={{color:C.sub,fontSize:14}}>Entra com o teu email</p>
+        </div>
+        {!sent?(
+          <div style={{display:'flex',flexDirection:'column',gap:14}}>
+            <Input label="Email" type="email" placeholder="o.teu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSend()} autoCapitalize="none" autoCorrect="off"/>
+            {err&&<p style={{fontSize:13,color:C.red}}>{err}</p>}
+            <Btn onClick={handleSend} loading={loading} style={{width:'100%',marginTop:4}}>Enviar link de acesso</Btn>
+          </div>
+        ):(
+          <div className="fade-up" style={{textAlign:'center',display:'flex',flexDirection:'column',gap:16}}>
+            <div style={{fontSize:48}}>📬</div>
+            <div style={{fontWeight:700,fontSize:18,color:C.text}}>Link enviado!</div>
+            <div style={{color:C.sub,fontSize:14,lineHeight:1.6}}>Verifica o email <strong style={{color:C.text}}>{email}</strong> e clica no botão de acesso.</div>
+            <Btn variant="ghost" onClick={()=>{setSent(false);setEmail('');}} style={{marginTop:8}}>Usar outro email</Btn>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SetupScreen({userId,onDone}){
+  const [name,setName]=useState('');
+  const [avatar,setAvatar]=useState(AVATARS[0]);
+  const [loading,setLoad]=useState(false);
+  const [err,setErr]=useState('');
+  async function handleSave(){if(!name.trim()){setErr('Escolhe um nome!');return;}setLoad(true);const{error}=await sb.from('profiles').insert({id:userId,username:name.trim(),avatar_emoji:avatar});if(error){setErr(error.message);setLoad(false);return;}const{data}=await sb.from('profiles').select('*').eq('id',userId).single();onDone(data);}
+  return(
+    <div className="scroll" style={{height:'100%',padding:24}}>
+      <div style={{maxWidth:400,margin:'0 auto',paddingTop:32}}>
+        <div style={{textAlign:'center',marginBottom:32}}>
+          <div style={{fontSize:48,marginBottom:4}}>{avatar}</div>
+          <h2 style={{fontWeight:900,fontSize:24,color:C.text}}>Cria o teu perfil</h2>
+          <p style={{color:C.sub,fontSize:14,marginTop:4}}>Como te deves chamar aqui?</p>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:20}}>
+          <Input label="O teu nome / alcunha" placeholder="Ex: Rui, O Monstro..." value={name} onChange={e=>setName(e.target.value)} maxLength={20} autoFocus/>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',color:C.sub,marginBottom:10}}>Escolhe o teu avatar</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5, 1fr)',gap:8}}>
+              {AVATARS.map(av=><button key={av} onClick={()=>setAvatar(av)} style={{fontSize:26,padding:'10px 0',borderRadius:12,border:'2px solid',borderColor:av===avatar?C.orange:'transparent',background:av===avatar?'rgba(249,115,22,.12)':C.card}}>{av}</button>)}
+            </div>
+          </div>
+          {err&&<p style={{fontSize:13,color:C.red}}>{err}</p>}
+          <Btn onClick={handleSave} loading={loading} style={{width:'100%',padding:'16px',fontSize:16,marginTop:4}}>Entrar no grupo 💪</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MainApp({userId,profile:initProfile}){
+  const [tab,setTab]=useState('ranking');
+  const [profile,setProfile]=useState(initProfile);
+  const [profiles,setProfiles]=useState([]);
+  const [workouts,setWorkouts]=useState([]);
+  const [completions,setCompletions]=useState([]);
+  const [dataLoaded,setDataLoaded]=useState(false);
+  const [toast,setToast]=useState(null);
+
+  async function loadData(){const[{data:profs},{data:wks},{data:cmps}]=await Promise.all([sb.from('profiles').select('*'),sb.from('workouts').select('*').order('date',{ascending:false}),sb.from('challenge_completions').select('*')]);if(profs)setProfiles(profs);if(wks)setWorkouts(wks);if(cmps)setCompletions(cmps);setDataLoaded(true);}
+
+  useEffect(()=>{loadData();const channel=sb.channel('gym-realtime').on('postgres_changes',{event:'*',schema:'public',table:'workouts'},()=>loadData()).on('postgres_changes',{event:'*',schema:'public',table:'challenge_completions'},()=>loadData()).on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>loadData()).subscribe();return()=>sb.removeChannel(channel);},[]);
+
+  const rankedPlayers=useMemo(()=>profiles.map(p=>{const pw=workouts.filter(w=>w.user_id===p.id);const pc=completions.filter(c=>c.user_id===p.id);return{...p,workouts:pw,completions:pc,pts:calcPts(pw,pc)};}).sort((a,b)=>b.pts-a.pts),[profiles,workouts,completions]);
+
+  const myWorkouts=workouts.filter(w=>w.user_id===userId);
+  const myCompletions=completions.filter(c=>c.user_id===userId);
+  const wk=weekKey();
+  const challenges=weekChallenges(wk);
+  const TABS=[{id:'ranking',icon:'🏆',label:'Ranking'},{id:'treino',icon:'💪',label:'Treino'},{id:'desafios',icon:'🎯',label:'Desafios'},{id:'perfil',icon:'👤',label:'Perfil'}];
+
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:C.bg}}>
+      {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
+      <div style={{background:C.bg,borderBottom:`1px solid ${C.bord}`,padding:`calc(${safe.top} + 12px) 16px 12px`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+        <div>
+          <div className="text-grad" style={{fontWeight:900,fontSize:22,letterSpacing:'-0.5px',lineHeight:1}}>GYM GANG</div>
+          <div style={{fontSize:11,color:C.dim,marginTop:2}}>Semana {wk}</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{width:8,height:8,borderRadius:'50%',background:C.green,boxShadow:`0 0 8px ${C.green}`}}/>
+          <span style={{fontSize:24}}>{profile.avatar_emoji}</span>
+        </div>
+      </div>
+      <div className="scroll" style={{flex:1,paddingBottom:70}}>
+        {!dataLoaded?<div style={{display:'flex',justifyContent:'center',paddingTop:60}}><Spinner/></div>:(
+          <>
+            {tab==='ranking'&&<RankingTab players={rankedPlayers} myId={userId}/>}
+            {tab==='treino'&&<TreinoTab userId={userId} profile={profile} workouts={myWorkouts} onToast={setToast} onReload={loadData}/>}
+            {tab==='desafios'&&<DesafiosTab userId={userId} challenges={challenges} completions={myCompletions} weekKey={wk} onToast={setToast} onReload={loadData}/>}
+            {tab==='perfil'&&<PerfilTab userId={userId} profile={profile} workouts={myWorkouts} completions={myCompletions} onToast={setToast} onProfileUpdate={setProfile}/>}
+          </>
+        )}
+      </div>
+      <div style={{position:'fixed',bottom:0,left:0,right:0,height:62,background:C.bg,borderTop:`1px solid ${C.bord}`,display:'flex',paddingBottom:safe.bottom,zIndex:50}}>
+        {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,background:'none',border:'none',color:tab===t.id?C.orange:C.dim,transition:'color .15s'}}><span style={{fontSize:20}}>{t.icon}</span><span style={{fontSize:10,fontWeight:700,letterSpacing:'.04em'}}>{t.label}</span></button>)}
+      </div>
+    </div>
+  );
+}
+
+function RankingTab({players,myId}){
+  const [open,setOpen]=useState(null);
+  return(
+    <div style={{padding:'16px 14px'}}>
+      <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:C.sub,marginBottom:14}}>Classificação</div>
+      {players.map((p,i)=>{
+        const rank=rankFor(p.pts);const nextRank=RANKS.find(r=>r.min>p.pts);const streak=dayStreak(p.workouts);const wc=thisWeekCount(p.workouts);const lastPhoto=p.workouts.find(w=>w.photo_url)?.photo_url;const isOpen=open===p.id;const isMe=p.id===myId;
+        return(
+          <div key={p.id} className="fade-up" onClick={()=>setOpen(isOpen?null:p.id)} style={{background:C.card,border:`1.5px solid ${i===0?'rgba(250,204,21,.35)':isMe?'rgba(249,115,22,.3)':C.bord}`,borderRadius:16,padding:'14px',marginBottom:10,cursor:'pointer',userSelect:'none'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <Medal rank={i+1}/>
+              <div style={{fontSize:32}}>{p.avatar_emoji}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontWeight:700,fontSize:15,color:C.text}}>{p.username}</span>
+                    {isMe&&<span style={{fontSize:10,background:'rgba(249,115,22,.15)',color:C.orange,padding:'1px 6px',borderRadius:99,fontWeight:700}}>Tu</span>}
+                  </div>
+                  <span style={{fontWeight:900,fontSize:18,color:C.orange}}>{p.pts}</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
+                  <span style={{fontSize:12,fontWeight:700,color:rank.color}}>{rank.label}</span>
+                  {streak>=3&&<span style={{fontSize:11,background:'rgba(249,115,22,.12)',color:C.orange,padding:'1px 7px',borderRadius:99,fontWeight:700}}>🔥 {streak}d</span>}
+                </div>
+                {nextRank&&<Bar value={p.pts-rank.min} max={nextRank.min-rank.min} color={rank.color}/>}
+              </div>
+            </div>
+            {isOpen&&(
+              <div onClick={e=>e.stopPropagation()} style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${C.bord}`}}>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',textAlign:'center',gap:10,marginBottom:14}}>
+                  {[[p.workouts.length,'Treinos'],[p.completions.length,'Desafios'],[streak,'Streak']].map(([v,l])=><div key={l}><div style={{fontWeight:900,fontSize:22,color:C.text}}>{v}</div><div style={{fontSize:11,color:C.sub}}>{l}</div></div>)}
+                </div>
+                <div style={{textAlign:'center',marginBottom:lastPhoto?14:0}}>
+                  <div style={{fontSize:11,color:C.sub,marginBottom:6}}>Esta semana</div>
+                  <div style={{display:'flex',justifyContent:'center'}}><Dots count={wc}/></div>
+                </div>
+                {lastPhoto&&<div style={{marginTop:12}}><img src={lastPhoto} alt="último treino" style={{width:'100%',maxHeight:200,objectFit:'cover',borderRadius:10,border:`1px solid ${C.bord}`}}/><div style={{fontSize:11,color:C.sub,marginTop:4,textAlign:'right'}}>Último treino com foto</div></div>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {players.length===0&&<div style={{textAlign:'center',paddingTop:40,color:C.sub}}><div style={{fontSize:36}}>🏋️</div><div style={{marginTop:8,fontSize:14}}>Nenhum membro ainda</div></div>}
+    </div>
+  );
+}
+
+function TreinoTab({userId,profile,workouts,onToast,onReload}){
+  const today=todayStr();
+  const todayWorkout=workouts.find(w=>w.date===today);
+  const done=!!todayWorkout;
+  const [photoPreview,setPhotoPreview]=useState(todayWorkout?.photo_url||null);
+  const [photoFile,setPhotoFile]=useState(null);
+  const [uploading,setUploading]=useState(false);
+  const fileRef=useRef();
+  const wc=thisWeekCount(workouts);
+  const streak=dayStreak(workouts);
+  const recentWithPhoto=workouts.filter(w=>w.photo_url).slice(0,6);
+
+  function handleFileChange(e){const file=e.target.files?.[0];if(!file)return;setPhotoFile(file);setPhotoPreview(URL.createObjectURL(file));}
+
+  async function handleCheckin(){setUploading(true);try{let photoUrl=null;if(photoFile)photoUrl=await uploadPhoto(userId,photoFile);const{error}=await sb.from('workouts').upsert({user_id:userId,date:today,photo_url:photoUrl},{onConflict:'user_id,date'});if(error)throw error;onToast(`+${WORKOUT_PTS} pts! Treino registado! 🔥`);await onReload();}catch(e){onToast('Erro: '+e.message);}setUploading(false);}
+
+  async function handleAddPhoto(){if(!photoFile)return;setUploading(true);try{const photoUrl=await uploadPhoto(userId,photoFile);const{error}=await sb.from('workouts').update({photo_url:photoUrl}).eq('user_id',userId).eq('date',today);if(error)throw error;onToast('Foto guardada! 📸');await onReload();}catch(e){onToast('Erro: '+e.message);}setUploading(false);}
+
+  const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const mn=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const now=new Date();
+  const dateLabel=`${dn[now.getDay()]}, ${now.getDate()} ${mn[now.getMonth()]}`;
+
+  return(
+    <div style={{padding:'16px 14px'}}>
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:C.sub}}>Hoje</div>
+        <div style={{fontSize:22,fontWeight:900,color:C.text,marginTop:2}}>{dateLabel}</div>
+      </div>
+      <div style={{display:'flex',gap:10,marginBottom:20}}>
+        <div style={{flex:1,background:C.card,borderRadius:14,padding:'12px 14px',border:`1px solid ${C.bord}`}}>
+          <div style={{fontSize:22,fontWeight:900,color:C.orange}}>{wc}</div>
+          <div style={{fontSize:11,color:C.sub,marginTop:2}}>treinos / semana</div>
+          <div style={{marginTop:8}}><Dots count={wc}/></div>
+        </div>
+        <div style={{flex:1,background:C.card,borderRadius:14,padding:'12px 14px',border:`1px solid ${C.bord}`}}>
+          <div style={{fontSize:22,fontWeight:900,color:streak>=3?C.orange:C.text}}>{streak>=3?'🔥':''}{streak}</div>
+          <div style={{fontSize:11,color:C.sub,marginTop:2}}>dias seguidos</div>
+          {wc>=3&&<div style={{fontSize:11,color:C.green,marginTop:6,fontWeight:600}}>✓ Bónus semana!</div>}
+        </div>
+      </div>
+      <div onClick={()=>!uploading&&fileRef.current?.click()} style={{background:C.card,border:`2px dashed ${photoPreview?C.bord:C.bord2}`,borderRadius:16,overflow:'hidden',aspectRatio:photoPreview?'auto':'4/3',display:'flex',alignItems:'center',justifyContent:'center',cursor:uploading?'default':'pointer',marginBottom:14,position:'relative',minHeight:photoPreview?'auto':180}}>
+        {photoPreview?(
+          <><img src={photoPreview} alt="treino" style={{width:'100%',display:'block',maxHeight:320,objectFit:'cover'}}/>{!done&&<div style={{position:'absolute',bottom:10,right:10,background:'rgba(0,0,0,.6)',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#fff',fontWeight:600}}>✎ Alterar</div>}</>
+        ):(
+          <div style={{textAlign:'center',padding:24,color:C.sub}}>
+            <div style={{fontSize:40,marginBottom:8}}>📸</div>
+            <div style={{fontWeight:700,fontSize:14,color:C.text}}>Adicionar foto</div>
+            <div style={{fontSize:12,marginTop:4}}>Opcional — tira uma foto do treino</div>
+          </div>
+        )}
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{display:'none'}}/>
+      {!done?(
+        <Btn onClick={handleCheckin} loading={uploading} style={{width:'100%',padding:'18px',fontSize:17,marginBottom:14}}>💪 Registar Treino · +{WORKOUT_PTS} pts</Btn>
+      ):(
+        <div style={{marginBottom:14}}>
+          <div style={{background:'rgba(52,211,153,.08)',border:`1px solid rgba(52,211,153,.2)`,borderRadius:14,padding:'14px 16px',textAlign:'center',marginBottom:10}}>
+            <div style={{fontSize:24,marginBottom:4}}>✅</div>
+            <div style={{fontWeight:700,color:C.green,fontSize:15}}>Treino feito hoje!</div>
+          </div>
+          {photoFile&&!todayWorkout?.photo_url&&<Btn onClick={handleAddPhoto} loading={uploading} variant="ghost" style={{width:'100%'}}>📸 Guardar foto</Btn>}
+          {!photoPreview&&<Btn onClick={()=>fileRef.current?.click()} variant="ghost" style={{width:'100%'}}>📸 Adicionar foto ao treino</Btn>}
+        </div>
+      )}
+      {recentWithPhoto.length>0&&(
+        <div>
+          <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:C.sub,marginBottom:10}}>Treinos recentes</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:6}}>
+            {recentWithPhoto.map(w=>(
+              <div key={w.id} style={{position:'relative',borderRadius:10,overflow:'hidden',aspectRatio:'1',border:`1px solid ${C.bord}`}}>
+                <img src={w.photo_url} alt={w.date} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(transparent,rgba(0,0,0,.7))',padding:'12px 6px 4px',fontSize:10,color:'#fff',fontWeight:600}}>{fmtDate(w.date)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DesafiosTab({userId,challenges,completions,weekKey:wk,onToast,onReload}){
+  const [loading,setLoading]=useState(null);
+  async function toggle(ch){const existing=completions.find(c=>c.challenge_id===ch.id&&c.week_key===wk);setLoading(ch.id);if(existing){await sb.from('challenge_completions').delete().eq('id',existing.id);onToast('Desafio desmarcado.');}else{const{error}=await sb.from('challenge_completions').insert({user_id:userId,challenge_id:ch.id,week_key:wk});if(error){onToast('Erro: '+error.message);setLoading(null);return;}onToast(`${ch.icon} +${ch.pts} pts! Desafio concluído!`);}await onReload();setLoading(null);}
+  const totalAvail=challenges.reduce((s,c)=>s+c.pts,0);
+  const totalEarned=challenges.filter(c=>completions.find(cc=>cc.challenge_id===c.id&&cc.week_key===wk)).reduce((s,c)=>s+c.pts,0);
+  return(
+    <div style={{padding:'16px 14px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+        <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:C.sub}}>Desafios da Semana</div>
+        <div style={{fontSize:12,color:C.yellow,fontWeight:700}}>{totalEarned}/{totalAvail} pts</div>
+      </div>
+      <div style={{background:C.card,border:`1px solid ${C.bord}`,borderRadius:14,padding:'10px 14px',marginBottom:16,fontSize:12,color:C.sub}}>🔄 Renovam automaticamente toda a segunda-feira</div>
+      {challenges.map(ch=>{
+        const done=!!completions.find(c=>c.challenge_id===ch.id&&c.week_key===wk);
+        return(
+          <div key={ch.id} style={{background:done?'rgba(52,211,153,.05)':C.card,border:`1.5px solid ${done?'rgba(52,211,153,.25)':C.bord}`,borderRadius:16,padding:'16px',marginBottom:12}}>
+            <div style={{display:'flex',gap:14,alignItems:'flex-start'}}>
+              <span style={{fontSize:38,lineHeight:1,flexShrink:0}}>{ch.icon}</span>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                  <div style={{fontWeight:700,fontSize:15,color:done?C.green:C.text}}>{ch.title}</div>
+                  <div style={{fontWeight:900,fontSize:14,color:C.yellow,flexShrink:0}}>+{ch.pts}</div>
+                </div>
+                <div style={{fontSize:13,color:C.sub,marginTop:3}}>{ch.desc}</div>
+                <Btn onClick={()=>toggle(ch)} loading={loading===ch.id} variant={done?'success':'ghost'} style={{marginTop:12,padding:'10px 16px',fontSize:13,width:'100%'}}>{done?'✓ Concluído — desfazer':'Marcar como feito'}</Btn>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PerfilTab({userId,profile,workouts,completions,onToast,onProfileUpdate}){
+  const [editName,setEditName]=useState(false);
+  const [name,setName]=useState(profile.username);
+  const [pickAvatar,setPickAvt]=useState(false);
+  const [savingName,setSaveN]=useState(false);
+  const [signingOut,setSignOut]=useState(false);
+  const pts=calcPts(workouts,completions);
+  const rank=rankFor(pts);
+  const streak=dayStreak(workouts);
+  const wc=thisWeekCount(workouts);
+  const nextR=RANKS.find(r=>r.min>pts);
+  const photos=workouts.filter(w=>w.photo_url);
+  async function saveName(){if(!name.trim())return;setSaveN(true);await sb.from('profiles').update({username:name.trim()}).eq('id',userId);onProfileUpdate({...profile,username:name.trim()});setEditName(false);setSaveN(false);onToast('Nome atualizado!');}
+  async function saveAvatar(av){await sb.from('profiles').update({avatar_emoji:av}).eq('id',userId);onProfileUpdate({...profile,avatar_emoji:av});setPickAvt(false);onToast('Avatar atualizado!');}
+  async function handleSignOut(){setSignOut(true);await sb.auth.signOut();}
+  return(
+    <div className="scroll" style={{padding:'16px 14px'}}>
+      <div style={{background:C.card,border:`1px solid ${C.bord}`,borderRadius:18,padding:20,marginBottom:14}}>
+        <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
+          <div style={{position:'relative'}}>
+            <div onClick={()=>setPickAvt(true)} style={{fontSize:52,lineHeight:1,cursor:'pointer',userSelect:'none'}}>{profile.avatar_emoji}</div>
+            <div style={{position:'absolute',bottom:-4,right:-4,background:C.orange,borderRadius:'50%',width:20,height:20,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#fff',border:`2px solid ${C.bg}`,pointerEvents:'none'}}>✎</div>
+          </div>
+          <div style={{flex:1,paddingTop:2}}>
+            {editName?(
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')saveName();if(e.key==='Escape')setEditName(false);}} autoFocus style={{flex:1,background:C.card2,border:`1.5px solid ${C.orange}`,borderRadius:8,padding:'6px 10px',color:C.text,fontSize:16,fontWeight:700,outline:'none'}}/>
+                <Btn onClick={saveName} loading={savingName} style={{padding:'7px 12px',fontSize:13}}>✓</Btn>
+              </div>
+            ):(
+              <div style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}} onClick={()=>setEditName(true)}>
+                <div style={{fontWeight:900,fontSize:20,color:C.text}}>{profile.username}</div>
+                <span style={{fontSize:13,color:C.dim}}>✎</span>
+              </div>
+            )}
+            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>
+              <span style={{fontSize:13,fontWeight:700,color:rank.color}}>{rank.label}</span>
+              <span style={{fontSize:13,color:C.dim}}>·</span>
+              <span style={{fontSize:13,color:C.orange,fontWeight:700}}>{pts} pts</span>
+            </div>
+            {nextR&&<div style={{marginTop:8}}><Bar value={pts-rank.min} max={nextR.min-rank.min} color={rank.color}/><div style={{fontSize:11,color:C.sub,marginTop:3}}>{nextR.min-pts} pts para {nextR.label}</div></div>}
+          </div>
+        </div>
+        {pickAvatar&&(
+          <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.bord}`}}>
+            <div style={{fontSize:12,color:C.sub,marginBottom:10}}>Escolhe o teu avatar</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5, 1fr)',gap:8}}>
+              {AVATARS.map(av=><button key={av} onClick={()=>saveAvatar(av)} style={{fontSize:26,padding:'8px 0',borderRadius:10,border:'2px solid',borderColor:av===profile.avatar_emoji?C.orange:'transparent',background:av===profile.avatar_emoji?'rgba(249,115,22,.12)':C.card2}}>{av}</button>)}
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+        {[['🏋️',workouts.length,'Total treinos'],['📅',wc,'Esta semana'],['🎯',completions.length,'Desafios'],['🔥',streak,'Streak dias']].map(([icon,val,label])=>(
+          <div key={label} style={{background:C.card,border:`1px solid ${C.bord}`,borderRadius:14,padding:'14px'}}>
+            <div style={{fontSize:20,marginBottom:4}}>{icon}</div>
+            <div style={{fontWeight:900,fontSize:24,color:C.text}}>{val}</div>
+            <div style={{fontSize:12,color:C.sub}}>{label}</div>
+          </div>
+        ))}
+      </div>
+      {photos.length>0&&(
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:C.sub,marginBottom:10}}>Fotos dos treinos</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:6}}>
+            {photos.slice(0,9).map(w=>(
+              <div key={w.id} style={{position:'relative',borderRadius:10,overflow:'hidden',aspectRatio:'1',border:`1px solid ${C.bord}`}}>
+                <img src={w.photo_url} alt={w.date} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'10px 5px 4px',background:'linear-gradient(transparent,rgba(0,0,0,.75))',fontSize:10,color:'#fff',fontWeight:600}}>{fmtDate(w.date)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{background:C.card,border:`1px solid ${C.bord}`,borderRadius:14,padding:'14px 16px',marginBottom:16}}>
+        <div style={{fontWeight:700,color:C.text,fontSize:14,marginBottom:12}}>Sistema de Pontos</div>
+        {[['🏋️ Cada treino',`+${WORKOUT_PTS} pts`],[`📅 Semana com 3+ treinos`,`+${WEEK_BONUS} bónus`],[`🗓️ 4 semanas consecutivas`,`+${MONTH_BONUS} bónus`],['🎯 Desafios semanais','+15–40 pts']].map(([l,v])=>(
+          <div key={l} style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:7}}>
+            <span style={{color:C.sub}}>{l}</span><span style={{color:C.orange,fontWeight:700}}>{v}</span>
+          </div>
+        ))}
+      </div>
+      <Btn variant="danger" onClick={handleSignOut} loading={signingOut} style={{width:'100%',marginBottom:8}}>Sair da conta</Btn>
+    </div>
+  );
+}
+
+function App(){
+  const [state,setState]=useState('loading');
+  const [userId,setUserId]=useState(null);
+  const [profile,setProfile]=useState(null);
+  useEffect(()=>{const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,session)=>{if(!session?.user){setUserId(null);setProfile(null);setState('auth');return;}setUserId(session.user.id);const{data}=await sb.from('profiles').select('*').eq('id',session.user.id).single();setProfile(data);setState(data?'app':'setup');});return()=>subscription.unsubscribe();},[]);
+  if(state==='loading')return <div style={{height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:C.bg}}><div style={{textAlign:'center'}}><div style={{fontSize:48,marginBottom:16}}>🏋️</div><Spinner/></div></div>;
+  if(state==='auth')return <AuthScreen/>;
+  if(state==='setup')return <SetupScreen userId={userId} onDone={p=>{setProfile(p);setState('app');}}/>;
+  if(state==='app')return <MainApp userId={userId} profile={profile}/>;
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
