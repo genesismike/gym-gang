@@ -1,12 +1,5 @@
 {
-  "version": 2,
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html",
-      "headers": {
-        "Content-Type": "text/html; charset=utf-8"
-      }
-    }
-  ]
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "framework": null
 }
